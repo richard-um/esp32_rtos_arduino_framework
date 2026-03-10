@@ -1,0 +1,32 @@
+# Build output
+build/
+sketch/build/
+*.bin
+*.elf
+*.map
+*.hex
+
+# Arduino
+*.ino.cpp
+
+# VSCode
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.log
+*.tmp
+*.swp
+
+# Python (if tools used)
+__pycache__/
+*.pyc
+
+# Mac
+*.DS_Store
+
+# Windows
+Desktop.ini
