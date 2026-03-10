@@ -1,38 +1,96 @@
-# ESP32 RTOS Framework (Arduino)
+# ESP32 RTOS Application Framework (Arduino)
 
-Lightweight **application framework for ESP32** built on top of  
+![ESP32](https://img.shields.io/badge/ESP32-supported-blue)
+![Arduino](https://img.shields.io/badge/Arduino-compatible-green)
+![FreeRTOS](https://img.shields.io/badge/RTOS-FreeRTOS-orange)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
+
+A lightweight **C++ application framework for ESP32** built on top of  
 **Arduino Core + FreeRTOS**.
 
-This project provides a minimal **RTOS abstraction layer** and a clean
-**application structure** suitable for embedded firmware projects.
+This framework allows developers to write firmware using a **clean RTOS-style architecture**
+while remaining fully compatible with the **Arduino build environment**.
 
-Designed for engineers who want **RTOS style firmware architecture**
-while still using the **Arduino ecosystem**.
+Instead of placing all logic inside `setup()` and `loop()`, the framework introduces
+a **structured application model using C++ classes and RTOS primitives**.
 
 ---
 
-# Features
+# Key Features
 
-- FreeRTOS abstraction layer
-- Task / Queue / Mutex / Semaphore wrapper
-- Timer API
-- Simple logging interface
-- Clean separation of framework and application
-- Arduino IDE compatible
-- ESP32 / ESP32-C3 / ESP32-C6 compatible
+• Arduino IDE compatible  
+• Built on ESP32 FreeRTOS kernel  
+• Clean C++ application architecture  
+• RTOS abstraction layer  
+• Logging support  
+• Modular OS wrapper APIs  
+
+Supported primitives:
+
+- Task
+- Queue
+- Mutex
+- Semaphore
+- Timer
+- Event groups
+- Logging
 
 ---
 
 # Architecture
 
 ```
-Arduino Core
-     │
-FreeRTOS Kernel
-     │
-Framework Layer (os_*)
-     │
-Application Layer (app)
+            +-------------------+
+            |   Arduino Core    |
+            +-------------------+
+                     |
+                     v
+            +-------------------+
+            |    FreeRTOS       |
+            +-------------------+
+                     |
+                     v
+            +-------------------+
+            | Framework Layer   |
+            |   (os namespace)  |
+            +-------------------+
+                     |
+                     v
+            +-------------------+
+            | Application Layer |
+            |   (app class)     |
+            +-------------------+
+```
+
+---
+
+# Execution Flow
+
+```
+Arduino Runtime
+      |
+      v
+framework_entry()
+      |
+      v
+app::run()
+      |
+      v
+app::main()
+```
+
+Example entry implementation:
+
+```cpp
+extern "C" bool framework_entry(void)
+{
+    static app application;
+
+    os::log::println("[BOOT] framework_entry");
+    application.run();
+
+    return true;
+}
 ```
 
 ---
@@ -44,165 +102,158 @@ sketch/
  ├─ src/
  │   ├─ framework/
  │   │   ├─ app_entry.cpp
- │   │   ├─ os_api.c
- │   │   └─ fwk_internal.h
+ │   │   ├─ app_base.h
+ │   │   ├─ app_base.cpp
+ │   │   ├─ os.h
+ │   │   ├─ os_core.cpp
+ │   │   ├─ os_queue.cpp
+ │   │   ├─ os_mutex.cpp
+ │   │   ├─ os_sem.cpp
+ │   │   ├─ os_timer.cpp
+ │   │   ├─ os_event.cpp
+ │   │   └─ os_log.cpp
  │   │
  │   └─ app/
- │       ├─ app.cpp
- │       └─ app.h
+ │       ├─ app.h
+ │       └─ app.cpp
 ```
 
-Framework layer provides **RTOS abstraction**.
-
-Application layer contains **user firmware logic**.
+Framework implements RTOS abstractions.  
+Application directory contains user firmware.
 
 ---
 
-# Execution Flow
+# Application Model
 
-```
-Arduino setup()
-      ↓
-framework_entry()
-      ↓
-app()
-```
-
-The framework starts the application entry point.
-
----
-
-# Application Entry
-
-Application must implement:
-
-```
-bool app(void);
-```
+Applications inherit from `app_base`.
 
 Example:
 
 ```cpp
-#include "app.h"
-
-bool app(void)
+class app : public app_base
 {
+protected:
+    void main() override;
+};
+```
+
+The framework runtime calls `run()` which invokes `main()`.
+
+---
+
+# Example Application
+
+```cpp
+void app::main()
+{
+    os::log::println("Application started");
+
     while (true)
     {
-        app_log("hello world\n");
-        os_delay_ms(1000);
+        os::log::println("tick");
+        os::delay_ms(1000);
     }
-
-    return true;
 }
 ```
 
 ---
 
-# OS Abstraction API
+# RTOS API (os namespace)
 
-### Task
+The framework wraps FreeRTOS primitives through the `os` namespace.
 
-```
-bool os_task_create(
-    TaskFunction_t fn,
-    const char *name,
-    uint32_t stack,
-    void *arg,
-    UBaseType_t prio,
-    os_task_t *out);
-```
-
-### Queue
+Modules include:
 
 ```
-os_queue_t os_queue_create(uint32_t len, uint32_t item_size);
-
-bool os_queue_send(os_queue_t q, const void *item, uint32_t timeout_ms);
-bool os_queue_recv(os_queue_t q, void *item, uint32_t timeout_ms);
+os::queue
+os::mutex
+os::sem
+os::timer
+os::event
+os::log
 ```
 
-### Mutex
+Example queue:
 
-```
-os_mutex_t os_mutex_create();
-bool os_mutex_lock(os_mutex_t m, uint32_t timeout_ms);
-void os_mutex_unlock(os_mutex_t m);
+```cpp
+auto q = os::queue::create(10, sizeof(message_t));
 ```
 
-### Semaphore
+Example mutex:
 
-```
-os_sem_t os_sem_create(uint32_t init_count);
-bool os_sem_take(os_sem_t s, uint32_t timeout_ms);
-void os_sem_give(os_sem_t s);
+```cpp
+auto m = os::mutex::create();
 ```
 
-### Timer
+Example timer:
 
-```
-os_timer_t os_timer_create(
-    const char *name,
-    uint32_t period_ms,
-    bool repeat,
-    void (*cb)(void *),
-    void *arg);
+```cpp
+auto t = os::timer::create("heartbeat", 1000, true, callback);
 ```
 
 ---
 
 # Logging
 
-```
-void app_log(const char *fmt, ...);
-```
-
-Example
-
-```
-app_log("temperature = %d\n", value);
+```cpp
+os::log::println("System ready");
 ```
 
 ---
 
-# Utilities
+# Why not use Arduino directly?
+
+Traditional Arduino sketches:
 
 ```
-void os_delay_ms(uint32_t ms);
-void os_yield(void);
+setup()
+loop()
 ```
+
+This becomes difficult to scale for complex firmware.
+
+The framework introduces:
+
+• Structured application entry  
+• RTOS primitives  
+• Modular architecture  
+• Maintainable firmware design
 
 ---
 
-# Design Goals
+# Getting Started
 
-- Clean firmware architecture
-- RTOS style development on Arduino
-- Minimal overhead
-- Easy portability
-- Maintain Arduino compatibility
+1. Install ESP32 Arduino Core
+2. Open project in Arduino IDE
+3. Compile and upload to ESP32 board
 
----
+Your application logic goes inside:
 
-# Roadmap
-
-Planned features:
-
-- BLE manager
-- WiFi manager
-- OTA update
-- NVS configuration storage
-- CLI shell
-- advanced logging
+```
+src/app/app.cpp
+```
 
 ---
 
 # Supported Boards
 
 - ESP32
-- ESP32‑C3
-- ESP32‑C6
-- ESP32‑S3
+- ESP32-C3
+- ESP32-C6
+- ESP32-S3
+
+---
+
+# Roadmap
+
+Planned modules:
+
+- BLE manager
+- WiFi manager
+- OTA firmware update
+- NVS configuration storage
+- CLI shell
+- Advanced logging
 
 ---
 
